@@ -108,7 +108,7 @@ Pela URL do ALB: a rota `/` mostra a versão (hash do commit) e `environment=pro
 3. **Push:** apenas na `main`, publica a imagem no ECR com a tag do commit.
 4. **Deploy:** renderiza a task definition com a nova imagem e atualiza o serviço ECS, aguardando a estabilidade.
 
-Pull requests executam só os passos 1 e 2, sem acesso à AWS.
+Pull requests executam só os passos 1 e 2, sem acesso à AWS. Os passos 3 e 4 só rodam quando a variável de repositório `DEPLOY_ENABLED` vale `true`. Com a infraestrutura desligada, o pipeline continua executando testes, build e scan, e termina verde.
 
 ## Decisões técnicas
 
