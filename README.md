@@ -4,8 +4,6 @@
 
 API containerizada rodando no **Amazon ECS Fargate** atrás de um **Application Load Balancer**. Um pipeline no **GitHub Actions** testa o código, escaneia a imagem em busca de vulnerabilidades, publica no **Amazon ECR** e faz o deploy automático, com rollback se a nova versão não ficar saudável. O pipeline acessa a AWS por **OIDC**, sem nenhuma chave de acesso guardada.
 
-> **Projeto 1 de 3** do meu portfólio DevOps na AWS.
-> Semana 1: ECS Fargate + CI/CD (este repositório) → Semana 2: Terraform multi-ambiente → Semana 3: DevSecOps.
 
 ## Destaques
 
