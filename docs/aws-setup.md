@@ -156,7 +156,19 @@ aws iam create-open-id-connect-provider \
   --client-id-list sts.amazonaws.com
 ```
 
-Role que **somente a branch `main` do seu repositório** pode assumir:
+Role que **somente a branch `main` do seu repositório** pode assumir.
+
+O que a AWS compara é o claim `sub` do token que o GitHub envia, e o formato dele **varia**: o formato clássico é `repo:DONO/REPO:ref:refs/heads/main`, mas no repositório deste projeto o token veio com os **IDs numéricos** do dono e do repositório, no formato `repo:DONO@ID_DONO/REPO@ID_REPO:ref:refs/heads/main`. Se a política esperar um formato e o token trouxer outro, o pipeline falha com `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+
+Como descobrir o valor correto:
+
+- **Pelo workflow (garantido):** adicione temporariamente ao job um passo que decodifica o token OIDC e imprime os claims `sub`, `aud` e `repository` (nunca imprima o token em si). Foi o que resolveu neste projeto.
+- **Pela API do GitHub (repositório público):** os IDs aparecem em `https://api.github.com/repos/DONO/REPO` nos campos `id` (repositório) e `owner.id` (dono).
+
+```bash
+# ajuste com os IDs reais do seu repositório
+export GH_SUB="repo:DONO@ID_DONO/REPO@ID_REPO:ref:refs/heads/main"
+```
 
 ```bash
 cat > trust-github.json <<EOF
@@ -167,8 +179,10 @@ cat > trust-github.json <<EOF
     "Principal": {"Federated": "arn:aws:iam::$ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"},
     "Action": "sts:AssumeRoleWithWebIdentity",
     "Condition": {
-      "StringEquals": {"token.actions.githubusercontent.com:aud": "sts.amazonaws.com"},
-      "StringLike":   {"token.actions.githubusercontent.com:sub": "repo:$GH_REPO:ref:refs/heads/main"}
+      "StringEquals": {
+        "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+        "token.actions.githubusercontent.com:sub": "$GH_SUB"
+      }
     }
   }]
 }
@@ -176,6 +190,13 @@ EOF
 
 aws iam create-role --role-name ${APP}-github-deploy \
   --assume-role-policy-document file://trust-github.json
+```
+
+Se a role já existe com o `sub` errado, corrija só a política de confiança:
+
+```bash
+aws iam update-assume-role-policy --role-name ${APP}-github-deploy \
+  --policy-document file://trust-github.json
 ```
 
 Permissões mínimas para publicar a imagem e atualizar o serviço:
@@ -256,3 +277,26 @@ aws iam delete-role --role-name ${APP}-github-deploy
 ```
 
 Depois confira no console (ECS, EC2 > Load Balancers, ECR, Secrets Manager) se não sobrou nada.
+
+---
+
+## Notas para quem usa Windows (PowerShell)
+
+Os comandos acima estão em bash. No PowerShell a lógica é a mesma, mas há diferenças que causam a maioria dos erros:
+
+| Assunto | Bash | PowerShell |
+|---|---|---|
+| Variável | `export APP=tasks-api` | `$APP = "tasks-api"` |
+| Variável em texto com `:` ao lado | `$ECR_URI:bootstrap` | `"${ECR_URI}:bootstrap"` (sem as chaves, o `:` quebra o nome da variável) |
+| Capturar saída | `ID=$(aws ...)` | `$ID = aws ...` |
+| JSON em arquivo | `cat > arq.json <<EOF` | `@"..."@ \| Set-Content -Path arq.json -Encoding ascii` |
+| Corpo JSON no `curl` | `-d '{"a":"b c"}'` | gravar em arquivo e usar `-d "@arq.json"` |
+| Valor com vírgula | `Type=forward,TargetGroupArn=$TG` | `"Type=forward,TargetGroupArn=$TG"` (entre aspas) |
+| Lista de subnets | `$SUBNET_IDS` | `-split "\s+"` para virar lista; `-join ","` para o formato CSV |
+
+Outras armadilhas:
+
+- **Paginador da CLI (`-- Mais --`):** rode `$env:AWS_PAGER = ""` em cada terminal novo.
+- **Variáveis perdidas ao fechar o terminal:** recupere pelo nome dos recursos, por exemplo `$TG_ARN = aws elbv2 describe-target-groups --names "$APP-tg" --query "TargetGroups[0].TargetGroupArn" --output text`.
+- **BOM em arquivos JSON:** use sempre `-Encoding ascii` no `Set-Content`; o encoding padrão do Windows PowerShell antigo grava um caractere invisível que a AWS CLI rejeita.
+- **`python3` não existe no Windows:** use `python` ou `py`.
