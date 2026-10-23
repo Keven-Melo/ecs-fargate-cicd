@@ -51,6 +51,7 @@ jobs:
             -t ${{ env.ECR_REPOSITORY }}:${{ github.sha }} .
 
       # Falha o pipeline se houver vulnerabilidade CRITICAL ou HIGH com correcao disponivel
+      # Fixado por SHA do commit (v0.36.0) por causa do incidente de supply chain no Trivy
       - name: Scan de vulnerabilidades (Trivy)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -60,6 +61,22 @@ jobs:
           ignore-unfixed: true
           vuln-type: os,library
           severity: CRITICAL,HIGH
+
+      # TEMPORARIO: mostra os claims que o GitHub envia a AWS. Remover depois de resolver o OIDC.
+      - name: DEBUG - claims do token OIDC (remover depois)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          python3 - <<'EOF'
+          import os, json, base64, urllib.request
+          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=sts.amazonaws.com"
+          req = urllib.request.Request(url, headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
+          token = json.load(urllib.request.urlopen(req))["value"]
+          payload = token.split(".")[1]
+          payload += "=" * (-len(payload) % 4)
+          claims = json.loads(base64.urlsafe_b64decode(payload))
+          for k in ("sub", "aud", "repository", "ref", "event_name"):
+              print(k, "=", claims.get(k))
+          EOF
 
       # Os passos abaixo so rodam em push na main (nao em pull requests)
       - name: Credenciais AWS (OIDC)
@@ -90,21 +107,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-            - name: DEBUG - claims do token OIDC (remover depois)
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          python3 - <<'EOF'
-          import os, json, base64, urllib.request
-          url = os.environ["ACTIONS_ID_TOKEN_REQUEST_URL"] + "&audience=sts.amazonaws.com"
-          req = urllib.request.Request(url, headers={"Authorization": "bearer " + os.environ["ACTIONS_ID_TOKEN_REQUEST_TOKEN"]})
-          token = json.load(urllib.request.urlopen(req))["value"]
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload))
-          for k in ("sub", "aud", "repository", "ref", "event_name"):
-              print(k, "=", claims.get(k))
-          EOF
 
       - name: Credenciais AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
