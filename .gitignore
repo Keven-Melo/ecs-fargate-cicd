@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+.env
+*.zip
+
+# arquivos temporarios gerados durante o setup na AWS
+taskdef.rendered.json

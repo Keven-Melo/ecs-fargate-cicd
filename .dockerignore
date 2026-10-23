@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+.venv
+venv
+tests
+docs
+ecs
+*.md
+*.zip
+pytest.ini
+requirements-dev.txt
+Dockerfile
+.dockerignore
